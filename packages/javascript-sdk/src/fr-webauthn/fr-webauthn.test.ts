@@ -107,9 +107,31 @@ describe('Test FRWebAuthn class with 7.0 "Usernameless"', () => {
 });
 
 describe('Test FRWebAuthn class with Conditional UI', () => {
+  beforeEach(() => {
+    // Mock navigator.credentials and window.PublicKeyCredential
+    Object.defineProperty(global.navigator, 'credentials', {
+      value: {
+        get: vi.fn().mockResolvedValue(null),
+        create: vi.fn(),
+      },
+      writable: true,
+    });
+    Object.defineProperty(window, 'PublicKeyCredential', {
+      value: {
+        isConditionalMediationAvailable: vi.fn(),
+      },
+      writable: true,
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('should detect if conditional UI is supported', async () => {
+    vi.spyOn(window.PublicKeyCredential, 'isConditionalMediationAvailable').mockResolvedValue(true);
     const isSupported = await FRWebAuthn.isConditionalUISupported();
-    expect(typeof isSupported).toBe('boolean');
+    expect(isSupported).toBe(true);
   });
 
   it('should return Authentication type with conditional UI metadata callback', () => {
@@ -141,5 +163,48 @@ describe('Test FRWebAuthn class with Conditional UI', () => {
     expect(publicKey.rpId).toBe('example.com');
     // allowCredentials should not be present for conditional UI with empty credentials
     expect(publicKey.allowCredentials).toBeUndefined();
+  });
+
+  it('should warn and fallback if conditional UI is requested but not supported', async () => {
+    // Mock browser support for conditional UI to be false
+    vi.spyOn(window.PublicKeyCredential, 'isConditionalMediationAvailable').mockResolvedValue(
+      false,
+    );
+    // FIX APPLIED HERE: Added block comment to empty function
+    const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {
+      /* empty */
+    });
+    const getSpy = vi.spyOn(navigator.credentials, 'get');
+
+    // Attempt to authenticate with conditional UI requested
+    await FRWebAuthn.getAuthenticationCredential({}, true);
+
+    // Expect a warning to be logged
+    expect(consoleSpy).toHaveBeenCalledWith(
+      'Conditional UI was requested, but is not supported by this browser.',
+    );
+
+    // Expect the call to navigator.credentials.get to NOT have the mediation property
+    expect(getSpy).toHaveBeenCalledWith(
+      expect.not.objectContaining({
+        mediation: 'conditional',
+      }),
+    );
+  });
+
+  it('should set mediation to conditional if supported', async () => {
+    // Mock browser support for conditional UI to be true
+    vi.spyOn(window.PublicKeyCredential, 'isConditionalMediationAvailable').mockResolvedValue(true);
+    const getSpy = vi.spyOn(navigator.credentials, 'get');
+
+    // Attempt to authenticate with conditional UI requested
+    await FRWebAuthn.getAuthenticationCredential({}, true);
+
+    // Expect the call to navigator.credentials.get to have the mediation property
+    expect(getSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mediation: 'conditional',
+      }),
+    );
   });
 });

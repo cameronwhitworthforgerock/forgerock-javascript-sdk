@@ -369,6 +369,9 @@ abstract class FRWebAuthn {
       const isConditionalSupported = await this.isConditionalUISupported();
       if (isConditionalSupported) {
         credentialRequestOptions.mediation = 'conditional' as CredentialMediationRequirement;
+      } else {
+        // eslint-disable-next-line no-console
+        console.warn('Conditional UI was requested, but is not supported by this browser.');
       }
     }
 
@@ -519,8 +522,9 @@ abstract class FRWebAuthn {
       timeout,
     };
 
-    // For conditional UI, allowCredentials should be an empty array or omitted
-    // Only add if there are actual credentials AND not empty
+    // For conditional UI, allowCredentials can be omitted.
+    // For standard WebAuthn, it may or may not be present.
+    // Only add the property if the array is not empty.
     if (allowCredentialsValue && allowCredentialsValue.length > 0) {
       options.allowCredentials = allowCredentialsValue;
     }
